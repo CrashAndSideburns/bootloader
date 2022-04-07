@@ -28,10 +28,25 @@ stage1:
     jc no_extensions_error
 
     ; Identify the bootable partition.
-    ; TODO
+    mov bx, partition_table
+    mov cx, 4
+.loop:
+    mov byte al, [bx]
+    cmp al, 0x80
+    je .bootable_partition_found
+    add bx, 0x10
+    loop .loop
+    jmp stage2_load_error
+.bootable_partition_found:
 
-    ; Load bootable partition Boot Record and FAT.
-    ; TODO
+    ; Load bootable partition Boot Record.
+    add bx, 0x08
+    mov eax, [bx]
+    mov [data_address_packet.address], eax
+    mov ah, 0x42
+    mov si, data_address_packet
+    int 0x13
+    jc stage2_load_error
 
     ; Locate and load C:/boot/bootloader.bin.
     ; TODO
@@ -84,11 +99,25 @@ print_char:
     popa
     ret
 
+data_address_packet:
+    db 0x10
+    db 0
+.count:
+    dw 1
+.offset:
+    dw boot_record
+.segment:
+    dw 0
+.address:
+    dq 0
+
 boot_message: db "Bootloader - Stage One", 0
-no_extensions_error_message: db "Disk does not support INT 13h extensions. Unable to boot.", 0
-stage2_load_error_message: db "Failed to load Stage Two. Unable to boot.", 0
+no_extensions_error_message: db "Error: Disk does not support INT 13h extensions.", 0
+stage2_load_error_message: db "Error: Failed to load Stage Two.", 0
 
 times 446-($-$$) db 0
 partition_table: times 4 * 16 db 0
 db 0x55
 db 0xAA
+
+boot_record:
