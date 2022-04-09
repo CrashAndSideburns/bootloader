@@ -17,6 +17,9 @@ stage1:
     jmp 0x0:.enforce_csip
 .enforce_csip:
 
+    ; Store the disk number.
+    mov [disk], dl
+
     ; Error if the boot disk does not support INT 13h extensions.
     mov ah, 0x41
     mov bx, 0x55AA
@@ -57,30 +60,28 @@ halt:
 load_cluster:
     pusha
 
-    xor bx, bx
-    mov bl, [boot_record.cluster_size]
+    movzx bx, [boot_record.cluster_size]
     mov [data_address_packet.count], bx
 
     mov [data_address_packet.offset], si
 
     mov ebx, [boot_record.hidden_sector_count]
-    mov [data_address_packet.address], ebx
-    mov bx, [boot_record.reserved_sector_count]
-    add [data_address_packet.address], bx
-    mov ebx, [boot_record.fat_size]
-    mov cl, [boot_record.fat_count]
+    add bx, [boot_record.reserved_sector_count]
+    movzx cx, [boot_record.fat_count]
 .loop:
-    add [data_address_packet.address], ebx
+    add ebx, [boot_record.fat_size]
     loop .loop
-
-    add [data_address_packet.address], eax
+    mov [data_address_packet.address], ebx
 
     mov ah, 0x42
     mov si, data_address_packet
+    mov dl, [disk]
     int 0x13
 
     popa
     ret
+
+disk: db 0
 
 data_address_packet:
     db 0x10
