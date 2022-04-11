@@ -113,8 +113,42 @@ load_cluster:
 ;   eax: current cluster address
 ; OUT
 ;   eax: subsequent cluster address
+; CLOBBERS
+;   TODO
 next_cluster:
-    ; TODO
+    ; Load 1 sector into the region allocated for FAT sectors.
+    mov word [data_address_packet.offset], fat
+    mov word [data_address_packet.count], 1
+
+    ; The sector of the FAT containing the relevant entry is given by:
+    ; (cluster_address * 4) / 512
+    ; This is not simplified to cluster_address / 128 due to the fact that
+    ; cluster_address * 4 is also needed to index the loaded sector.
+    shl eax, 2
+    pusha
+    shr eax, 9
+    add eax, [boot_record.hidden_sector_count]
+    add ax, [boot_record.reserved_sector_count]
+    mov [data_address_packet.address], eax
+
+    ; Load the appropriate sector from the disk.
+    mov ah, 0x42
+    mov si, data_address_packet
+    mov dl, [disk]
+    int 0x13
+    popa
+
+    ; The index of the relevant entry in this sector of the FAT is given by:
+    ; (cluster_address * 4) % 512
+    ; A bitwise AND may seem like an odd way to compute the modulus, but it
+    ; works due to the fact that 2^n is congruent to 0 mod 512 for all n >= 9.
+    ; As such, the 9 lowest bits can be taken as the modulus.
+    and ax, 0x01FF
+    mov si, ax
+
+    ; Load the value in the relevant entry of the FAT into eax.
+    mov eax, [si + fat]
+    ret
 
 ; locate a file in a directory
 ; IN
@@ -214,12 +248,10 @@ partition_table: times 4 * 16 db 0
 db 0x55
 db 0xAA
 
-; 0x7E00, where stage 2 will be loaded.
-stage2:
 
 ; Some labels to make accessing the currently loaded portion of the FAT, the
-; currently loaded cluster, and the fields of the VBR easier. This space is not
-; reserved, and is overwritten by stage 2 when it is loaded.
+; currently loaded cluster, and the fields of the VBR easier. Stage 2 of the
+; bootloader is loaded in at 0x8200.
 SECTION .bss
 boot_record:
     resb 3
@@ -259,4 +291,5 @@ boot_record:
     resb 2
 fat:
     resb 512
+stage2:
 cluster:
