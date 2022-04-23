@@ -7,10 +7,23 @@ stage2:
     cmp ax, 1
     je .a20_enabled
 
-    ; Attempt to enable the A20 line.
+    ; Attempt to enable the A20 line using INT 15h.
+    mov ax, 0x2401
+    int 0x15
+    call check_a20
+    cmp ax, 1
+    je .a20_enabled
+
     ; TODO
+    ; Attempt to enable the A20 line using the keyboard controller and fast A20
+    ; methods.
+
+    ; Unable to enable the A20 line.
+    jmp halt
 
 .a20_enabled:
+    ; Load the GDT
+    lgdt [gdtr]
 
 halt:
     hlt
@@ -59,3 +72,26 @@ check_a20:
     pop ds
 
     ret
+
+gdtr:
+.limit:
+    dw gdt.end
+.base:
+    dd gdt
+
+; The Global Descriptor Table.
+gdt:
+.null_descriptor:
+    dq 0
+.kernel_mode_code_segment:
+    dq 0x00_A_F_9A_00_0000_FFFF
+.kernel_mode_data_segment:
+    dq 0x00_C_F_92_00_0000_FFFF
+.user_mode_code_segment:
+    dq 0x00_A_F_FA_00_0000_FFFF
+.user_mode_data_segment:
+    dq 0x00_C_F_F2_00_0000_FFFF
+.task_state_segment:
+    ; TODO
+    ; Add appropriate TSS.
+.end:
